@@ -3,6 +3,7 @@
 An advanced forex analysis and prediction tool built with **Streamlit**, **TensorFlow (LSTM/GRU)**, and **scikit-learn**.  
 The app allows traders, researchers, and enthusiasts to backtest **20 pre-compiled trading strategies** on historical forex data and forecast **future market movements** using deep learning models.
 
+Try app from here : [Forex Price Predictor](https://forexpricepredictor.streamlit.app/Backtest)
 ---
 
 ## 🚀 Features
