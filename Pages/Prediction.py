@@ -256,10 +256,24 @@ def trend_predictor(data):
             votes = counts.to_dict()
             non_empty_zones += 1
 
-        lbl = label_map[sig]
-        zone_results.append({"zone": i, "signal": sig, "confidence": conf, "label": lbl, "votes": votes})
+        if isinstance(sig, (np.generic,)):
+            sig = sig.item()
+        lbl = label_map.get(sig)
+        if lbl is None:
+            # Try common normalisations
+            lbl = label_map.get(str(sig).strip().lower(), "UNKNOWN")
+            import streamlit as st
+            st.warning(f"Unexpected signal value: {repr(sig)} (type={type(sig)}). "
+                       f"Known keys: {list(label_map.keys())[:10]}...")
+        zone_results.append({
+            "zone": i,
+            "signal": sig,
+            "confidence": conf,
+            "label": lbl,
+            "votes": votes
+        })
         c.metric(f"Zone {i}", lbl, f"{conf*100:.1f}% agreement", help=f"Votes: {votes}")
-
+        
     if non_empty_zones == 0:
         st.warning("All zones were empty.")
         return
