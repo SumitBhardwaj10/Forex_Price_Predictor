@@ -225,8 +225,36 @@ def feature_engineering(data):
 #===============================================================================
 
 def trend_predictor(data):
-    features = st.session_state.zone_scale.transform(data)
-    prediction = st.session_state.zone_model.predict(features)
+    # Local import ensures `st` name is bound early in the function
+    import streamlit as st
+    import numpy as np
+    import pandas as pd
+
+    # Defensive checks
+    zs = st.session_state.get("zone_scale")
+    zm = st.session_state.get("zone_model")
+    if zs is None or zm is None:
+        st.error("Missing session_state['zone_scale'] or session_state['zone_model']. "
+                 "Load models/scalers before running trend_predictor.")
+        return
+
+    # Ensure data is DataFrame-like and has rows
+    if data is None or (hasattr(data, "shape") and data.shape[0] == 0):
+        st.warning("No zone data provided to trend_predictor.")
+        return
+
+    try:
+        features = zs.transform(data)
+    except Exception as e:
+        st.error(f"zone_scale.transform failed: {e}")
+        raise
+
+    try:
+        prediction = zm.predict(features)
+    except Exception as e:
+        st.error(f"zone_model.predict failed: {e}")
+        raise
+
     pred = (
         pd.Series(prediction)
         .map({0: -1, 1: 11, 2: 11, 3: 0, 4: 1, 5: 0})
@@ -237,6 +265,7 @@ def trend_predictor(data):
     if pred.empty:
         st.warning("No valid predictions after mapping.")
         return
+
     zones = np.array_split(pred, 4)
     label_map = {-1: "Downtrend 📉", 0: "Sideways ➡️", 1: "Uptrend 📈"}
     zone_results = []
@@ -256,15 +285,17 @@ def trend_predictor(data):
             votes = counts.to_dict()
             non_empty_zones += 1
 
+        # Normalise numpy scalars to Python types
         if isinstance(sig, (np.generic,)):
             sig = sig.item()
+
+        # Lookup label robustly
         lbl = label_map.get(sig)
         if lbl is None:
-            # Try common normalisations
             lbl = label_map.get(str(sig).strip().lower(), "UNKNOWN")
-            import streamlit as st
             st.warning(f"Unexpected signal value: {repr(sig)} (type={type(sig)}). "
                        f"Known keys: {list(label_map.keys())[:10]}...")
+
         zone_results.append({
             "zone": i,
             "signal": sig,
@@ -273,7 +304,7 @@ def trend_predictor(data):
             "votes": votes
         })
         c.metric(f"Zone {i}", lbl, f"{conf*100:.1f}% agreement", help=f"Votes: {votes}")
-        
+
     if non_empty_zones == 0:
         st.warning("All zones were empty.")
         return
@@ -297,8 +328,9 @@ def trend_predictor(data):
                     best_zone_idx = idx
         final_signal = best_sig
 
-    final_label = label_map[final_signal]
-    final_support = zone_counts[final_signal] / max(non_empty_zones, 1) * 100.0
+    # Final label lookup (safe)
+    final_label = label_map.get(final_signal, "UNKNOWN")
+    final_support = zone_counts.get(final_signal, 0) / max(non_empty_zones, 1) * 100.0
 
     st.metric("🔥🔥Final Trend🔥🔥", final_label, f"{final_support:.0f}% of zones")
 
